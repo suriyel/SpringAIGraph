@@ -18,6 +18,7 @@ import java.util.Set;
  *   <li>Which channels were updated (triggers node execution)</li>
  *   <li>Execution history</li>
  *   <li>Timing information</li>
+ *   <li>Message context (for Spring AI integration)</li>
  * </ul>
  *
  * @author AIGraph Team
@@ -32,6 +33,8 @@ public class ExecutionContext {
     private final PregelConfig config;
     private final Instant startTime;
     private final List<ExecutionStep> stepHistory;
+    private final MessageContext messageContext;
+    private volatile boolean interrupted;
 
     /**
      * Creates a new execution context with initial updated channels from ChannelManager.
@@ -45,7 +48,7 @@ public class ExecutionContext {
                             NodeRegistry nodeRegistry, PregelConfig config) {
         this(threadId, 0, channelManager, nodeRegistry,
                 channelManager.getUpdatedChannels(),
-                config, Instant.now(), new ArrayList<>());
+                config, Instant.now(), new ArrayList<>(), new MessageContext(threadId));
     }
 
     /**
@@ -65,7 +68,25 @@ public class ExecutionContext {
                             PregelConfig config) {
         this(threadId, 0, channelManager, nodeRegistry,
                 initialUpdatedChannels,
-                config, Instant.now(), new ArrayList<>());
+                config, Instant.now(), new ArrayList<>(), new MessageContext(threadId));
+    }
+
+    /**
+     * Creates a new execution context with message context.
+     *
+     * @param threadId               the thread/session identifier
+     * @param channelManager         the channel manager
+     * @param nodeRegistry           the node registry
+     * @param initialUpdatedChannels the channels to consider as updated initially
+     * @param config                 the pregel configuration
+     * @param messageContext         the message context
+     */
+    public ExecutionContext(String threadId, ChannelManager channelManager,
+                            NodeRegistry nodeRegistry, Set<String> initialUpdatedChannels,
+                            PregelConfig config, MessageContext messageContext) {
+        this(threadId, 0, channelManager, nodeRegistry,
+                initialUpdatedChannels,
+                config, Instant.now(), new ArrayList<>(), messageContext);
     }
 
     /**
@@ -74,7 +95,8 @@ public class ExecutionContext {
     private ExecutionContext(String threadId, int stepNumber,
                              ChannelManager channelManager, NodeRegistry nodeRegistry,
                              Set<String> updatedChannels, PregelConfig config,
-                             Instant startTime, List<ExecutionStep> stepHistory) {
+                             Instant startTime, List<ExecutionStep> stepHistory,
+                             MessageContext messageContext) {
         this.threadId = threadId;
         this.stepNumber = stepNumber;
         this.channelManager = channelManager;
@@ -83,6 +105,8 @@ public class ExecutionContext {
         this.config = config;
         this.startTime = startTime;
         this.stepHistory = stepHistory;
+        this.messageContext = messageContext != null ? messageContext : new MessageContext(threadId);
+        this.interrupted = false;
     }
 
     /**
@@ -93,7 +117,32 @@ public class ExecutionContext {
      */
     public ExecutionContext nextStep(Set<String> newUpdatedChannels) {
         return new ExecutionContext(threadId, stepNumber + 1, channelManager,
-                nodeRegistry, newUpdatedChannels, config, startTime, stepHistory);
+                nodeRegistry, newUpdatedChannels, config, startTime, stepHistory, messageContext);
+    }
+
+    /**
+     * Creates a new context with updated message context.
+     *
+     * @param newMessageContext the updated message context
+     * @return a new context with the message context updated
+     */
+    public ExecutionContext withMessageContext(MessageContext newMessageContext) {
+        return new ExecutionContext(threadId, stepNumber, channelManager,
+                nodeRegistry, updatedChannels, config, startTime, stepHistory, newMessageContext);
+    }
+
+    /**
+     * Interrupts the execution.
+     */
+    public void interrupt() {
+        this.interrupted = true;
+    }
+
+    /**
+     * Checks if execution has been interrupted.
+     */
+    public boolean isInterrupted() {
+        return interrupted;
     }
 
     /**
@@ -112,12 +161,13 @@ public class ExecutionContext {
      * <ul>
      *   <li>Maximum steps reached</li>
      *   <li>No channels were updated (fixed point reached)</li>
+     *   <li>Execution has been interrupted</li>
      * </ul>
      *
      * @return true if execution should terminate
      */
     public boolean isTerminated() {
-        return stepNumber >= config.maxSteps() || updatedChannels.isEmpty();
+        return stepNumber >= config.maxSteps() || updatedChannels.isEmpty() || interrupted;
     }
 
     /**
@@ -148,4 +198,5 @@ public class ExecutionContext {
     public Set<String> getUpdatedChannels() { return updatedChannels; }
     public PregelConfig getConfig() { return config; }
     public List<ExecutionStep> getStepHistory() { return List.copyOf(stepHistory); }
+    public MessageContext getMessageContext() { return messageContext; }
 }

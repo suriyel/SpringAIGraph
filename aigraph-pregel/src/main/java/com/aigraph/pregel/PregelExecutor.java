@@ -115,9 +115,9 @@ public class PregelExecutor {
         log.debug("Step {}: Reading inputs for {} nodes", stepNum, nodesToRun.size());
         Map<String, Object> nodeInputs = prepareNodeInputs(nodesToRun, channelManager);
 
-        // Phase 3: Execute nodes in parallel
+        // Phase 3: Execute nodes in parallel (pass context for context-aware nodes)
         log.debug("Step {}: Executing {} nodes", stepNum, nodesToRun.size());
-        Map<String, NodeResult> results = executionService.executeNodes(nodesToRun, nodeInputs);
+        Map<String, NodeResult> results = executionService.executeNodes(nodesToRun, nodeInputs, context);
 
         // Phase 4: Update channels with results
         log.debug("Step {}: Updating channels", stepNum);

@@ -1,5 +1,6 @@
 package com.aigraph.pregel.internal;
 
+import com.aigraph.nodes.ContextAwareNode;
 import com.aigraph.nodes.Node;
 import com.aigraph.pregel.NodeResult;
 import org.slf4j.Logger;
@@ -38,12 +39,13 @@ public class ExecutionService {
     /**
      * Executes nodes in parallel.
      *
-     * @param nodes  the nodes to execute
-     * @param inputs map of node name to input value
+     * @param nodes   the nodes to execute
+     * @param inputs  map of node name to input value
+     * @param context the execution context (for context-aware nodes)
      * @return map of node name to execution result
      */
     @SuppressWarnings("unchecked")
-    public Map<String, NodeResult> executeNodes(List<Node<?, ?>> nodes, Map<String, Object> inputs) {
+    public Map<String, NodeResult> executeNodes(List<Node<?, ?>> nodes, Map<String, Object> inputs, Object context) {
         if (nodes.isEmpty()) {
             return Map.of();
         }
@@ -55,7 +57,7 @@ public class ExecutionService {
             Object input = inputs.get(nodeName);
 
             CompletableFuture<NodeResult> future = CompletableFuture.supplyAsync(() ->
-                    executeNode((Node<Object, Object>) node, input), threadPool);
+                    executeNode((Node<Object, Object>) node, input, context), threadPool);
 
             futures.put(nodeName, future);
         }
@@ -96,11 +98,13 @@ public class ExecutionService {
     /**
      * Executes a single node and collects its writes.
      *
-     * @param node  the node to execute
-     * @param input the input value
+     * @param node    the node to execute
+     * @param input   the input value
+     * @param context the execution context (for context-aware nodes)
      * @return the execution result
      */
-    private NodeResult executeNode(Node<Object, Object> node, Object input) {
+    @SuppressWarnings("unchecked")
+    private NodeResult executeNode(Node<Object, Object> node, Object input, Object context) {
         String nodeName = node.getName();
         Instant start = Instant.now();
 
@@ -108,8 +112,14 @@ public class ExecutionService {
             log.debug("Executing node '{}' with input: {}", nodeName,
                     input != null ? input.getClass().getSimpleName() : "null");
 
-            // Execute the node
-            Object output = node.invoke(input);
+            // Execute the node (context-aware if applicable)
+            Object output;
+            if (node instanceof ContextAwareNode) {
+                log.debug("Node '{}' is context-aware, passing execution context", nodeName);
+                output = ((ContextAwareNode<Object, Object>) node).invokeWithContext(input, context);
+            } else {
+                output = node.invoke(input);
+            }
 
             Duration duration = Duration.between(start, Instant.now());
             log.debug("Node '{}' completed in {}ms", nodeName, duration.toMillis());

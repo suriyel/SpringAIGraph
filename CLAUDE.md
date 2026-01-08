@@ -260,6 +260,89 @@ spring:
 - Immutability: Most data structures are immutable; `ChannelManager` and `NodeRegistry` use concurrent collections for thread safety
 - Builder pattern for complex objects: `NodeBuilder`, `GraphBuilder`, `PregelConfig.Builder`
 
+## Spring AI Integration (v0.0.9+)
+
+### MessageContext
+
+The framework provides deep Spring AI integration through `MessageContext`, which stores conversation history and metadata:
+
+```java
+// Create message context
+MessageContext context = new MessageContext("conversation-id");
+
+// Add messages
+context = context.addMessage("user", "Hello!")
+    .addMessage("assistant", "Hi there!")
+    .withMetadata("userId", "user-123");
+
+// Access message history
+List<Message> messages = context.getMessages();
+Message lastMessage = context.getLastMessage();
+List<Message> userMessages = context.getMessagesByRole("user");
+```
+
+**Key Features:**
+- **Serializable**: Can be persisted in checkpoints
+- **Immutable**: All operations return new instances
+- **Thread-safe**: Safe for concurrent access
+- **Rich API**: Filter by role, access metadata, manage conversation history
+
+### Context-Aware Nodes
+
+Nodes can access execution context including message history:
+
+```java
+Node<String, String> contextAwareNode = NodeBuilder.<String, String>create("chat-node")
+    .subscribeOnly("input")
+    .processWithContext((input, ctx) -> {
+        // Cast to ExecutionContext
+        ExecutionContext execCtx = (ExecutionContext) ctx;
+        MessageContext msgCtx = execCtx.getMessageContext();
+
+        // Access message history
+        List<Message> history = msgCtx.getMessages();
+
+        // Process with context
+        return processWithHistory(input, history);
+    })
+    .writeTo("output")
+    .build();
+```
+
+**Use Cases:**
+- AI agents that need conversation history
+- Context-dependent decision making
+- Stateful multi-turn dialogues
+- Personalized responses based on session data
+
+### Stop and Resume
+
+Execution can be interrupted and resumed with full context preservation:
+
+```java
+// Interrupt execution
+Node<String, String> node = NodeBuilder.<String, String>create("processor")
+    .processWithContext((input, ctx) -> {
+        ExecutionContext execCtx = (ExecutionContext) ctx;
+
+        if (shouldPause(input)) {
+            execCtx.interrupt(); // Stop execution
+        }
+
+        return process(input);
+    })
+    .build();
+
+// Resume from checkpoint (requires checkpoint module)
+Pregel<String, String> pregel = graph.compile();
+String result = pregel.resumeFrom(threadId, checkpointId);
+```
+
+**Checkpoint Integration:**
+- `MessageContext` is `Serializable` and can be saved to checkpoints
+- `ExecutionContext` includes MessageContext in checkpoint data
+- Resume restores full conversation state
+
 ## Key Design Principles from Specifications
 
 1. **Type Safety First**: Extensive use of Java generics for compile-time type checking
@@ -267,6 +350,7 @@ spring:
 3. **Functional Friendly**: Lambda support throughout the API
 4. **Concurrent Safe**: Thread-safe collections and BSP synchronization barrier ensure correctness
 5. **Zero Dependencies for Core**: `aigraph-core`, `aigraph-channels`, `aigraph-nodes` have no external dependencies
+6. **Context-Aware**: Deep Spring AI integration with message context and conversation history
 
 ## Debugging
 

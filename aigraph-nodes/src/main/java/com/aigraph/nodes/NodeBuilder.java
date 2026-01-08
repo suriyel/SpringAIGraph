@@ -1,5 +1,6 @@
 package com.aigraph.nodes;
 
+import com.aigraph.core.functional.ContextAwareNodeFunction;
 import com.aigraph.core.functional.NodeFunction;
 import com.aigraph.core.utils.ValidationUtils;
 
@@ -19,6 +20,7 @@ public final class NodeBuilder<I, O> {
     private final LinkedHashSet<String> readChannels;
     private final LinkedHashMap<String, Function<O, ?>> writeTargets;
     private NodeFunction<I, O> processor;
+    private ContextAwareNodeFunction<I, O> contextAwareProcessor;
     private NodeMetadata.Builder metadataBuilder;
     private ExecutorService executor;
 
@@ -83,6 +85,34 @@ public final class NodeBuilder<I, O> {
      */
     public NodeBuilder<I, O> process(NodeFunction<I, O> function) {
         this.processor = ValidationUtils.requireNonNull(function, "function");
+        this.contextAwareProcessor = null; // Clear context-aware processor
+        return this;
+    }
+
+    /**
+     * Sets a context-aware processing function.
+     * <p>
+     * This function receives both input and execution context, allowing
+     * access to message history, metadata, and other contextual information.
+     * <p>
+     * Example:
+     * <pre>{@code
+     * .processWithContext((input, ctx) -> {
+     *     ExecutionContext context = (ExecutionContext) ctx;
+     *     MessageContext msgCtx = context.getMessageContext();
+     *     // Access message history
+     *     List<Message> messages = msgCtx.getMessages();
+     *     // Process with context
+     *     return doSomething(input, messages);
+     * })
+     * }</pre>
+     *
+     * @param function the context-aware processing function
+     * @return this builder
+     */
+    public NodeBuilder<I, O> processWithContext(ContextAwareNodeFunction<I, O> function) {
+        this.contextAwareProcessor = ValidationUtils.requireNonNull(function, "function");
+        this.processor = null; // Clear regular processor
         return this;
     }
 
@@ -146,11 +176,25 @@ public final class NodeBuilder<I, O> {
     public Node<I, O> build() {
         ValidationUtils.requireState(!subscribedChannels.isEmpty(),
                 "Node must subscribe to at least one channel");
-        ValidationUtils.requireNonNull(processor,
-                "Node must have a processing function");
+        ValidationUtils.requireState(processor != null || contextAwareProcessor != null,
+                "Node must have a processing function (use process() or processWithContext())");
 
         NodeMetadata metadata = metadataBuilder.build();
 
+        // Build context-aware node if context processor is provided
+        if (contextAwareProcessor != null) {
+            return new ContextAwareFunctionalNode<>(
+                    name,
+                    subscribedChannels,
+                    readChannels,
+                    writeTargets,
+                    contextAwareProcessor,
+                    metadata,
+                    executor
+            );
+        }
+
+        // Build regular node
         return new FunctionalNode<>(
                 name,
                 subscribedChannels,

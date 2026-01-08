@@ -19,7 +19,7 @@ A Java implementation of LangGraph - a stateful multi-actor graph execution fram
 <dependency>
     <groupId>com.aigraph</groupId>
     <artifactId>aigraph-spring-boot-starter</artifactId>
-    <version>0.0.8</version>
+    <version>0.0.9</version>
 </dependency>
 ```
 
@@ -52,6 +52,76 @@ Graph<String, String> graph = GraphBuilder.<String, String>create()
 Pregel<String, String> pregel = graph.compile();
 String result = pregel.invoke("hello");
 System.out.println(result); // "HELLO"
+```
+
+### NEW: Context-Aware AI Agent Example
+
+```java
+// Create a context-aware node that accesses conversation history
+Node<String, String> chatNode = NodeBuilder.<String, String>create("ai-chat")
+    .subscribeOnly("input")
+    .processWithContext((input, ctx) -> {
+        ExecutionContext execCtx = (ExecutionContext) ctx;
+        MessageContext msgCtx = execCtx.getMessageContext();
+
+        // Access conversation history
+        List<Message> history = msgCtx.getMessages();
+
+        // Process with context
+        return generateResponse(input, history);
+    })
+    .writeTo("output")
+    .build();
+
+Graph<String, String> graph = GraphBuilder.<String, String>create()
+    .name("ai-agent")
+    .addNode("ai-chat", chatNode)
+    .setInput("input")
+    .setOutput("output")
+    .build();
+
+Pregel<String, String> pregel = graph.compile();
+String response = pregel.invoke("Hello!");
+```
+
+### NEW: Reactive Execution Example
+
+```java
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
+
+Pregel<String, String> pregel = graph.compile();
+
+// Reactive single value execution
+Mono<String> resultMono = pregel.invokeReactive("input");
+resultMono.subscribe(
+    result -> System.out.println("Result: " + result),
+    error -> System.err.println("Error: " + error),
+    () -> System.out.println("Complete")
+);
+
+// Reactive streaming of execution steps
+Flux<ExecutionStep> steps = pregel.streamReactive("input");
+steps
+    .doOnNext(step -> System.out.println("Step " + step.stepNumber()))
+    .take(10) // Cancellation support
+    .timeout(Duration.ofSeconds(30)) // Timeout support
+    .subscribe();
+```
+
+### NEW: Checkpoint and Resume Example
+
+```java
+import com.aigraph.checkpoint.memory.MemoryCheckpointer;
+
+Pregel<String, String> pregel = graph.compile();
+pregel.setCheckpointer(new MemoryCheckpointer());
+
+// Execute with automatic checkpointing
+String result = pregel.invoke("input");
+
+// Resume from checkpoint
+String resumed = pregel.resumeFrom(threadId, checkpointId);
 ```
 
 ## Module Overview
@@ -119,21 +189,32 @@ Apache License 2.0
 
 ## Status
 
-**Version**: 0.0.8
-**Status**: Beta - Core functionality implemented
+**Version**: 0.0.9
+**Status**: Beta - Core functionality + Advanced features
 
-**Implemented**:
+**Implemented** ✅:
 - Core framework (Channels, Nodes, Pregel, Graph)
 - Spring Boot integration
-- Checkpoint system
-- Basic examples
+- Checkpoint system with resume support
+- **NEW**: Spring AI deep integration with MessageContext
+- **NEW**: Context-aware nodes with execution context access
+- **NEW**: Reactive programming with Mono/Flux (Project Reactor)
+- **NEW**: Stop/Resume execution with full state persistence
+- Comprehensive examples and documentation
+
+**What's New in v0.0.9**:
+- 🎯 **MessageContext**: Stateful conversation management for AI agents
+- 🔄 **Reactive APIs**: Non-blocking execution with Mono/Flux
+- 💾 **Checkpoint/Resume**: Full state persistence and restoration
+- 🧠 **Context-Aware Nodes**: Access message history and execution state
+- 📊 **Stream Monitoring**: Real-time execution step streaming
 
 **Roadmap**:
-- Advanced node types (Composite, Conditional)
-- More checkpoint backends (JDBC, Redis)
-- Monitoring and metrics (Actuator integration)
-- Graph visualization
-- Advanced examples and documentation
+- Direct Spring AI ChatClient integration
+- Distributed execution support
+- Hot observable streams
+- Enhanced monitoring and metrics
+- Graph visualization tools
 
 ## Contributing
 
