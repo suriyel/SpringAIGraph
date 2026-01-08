@@ -118,7 +118,7 @@ public class SpringBootIntegrationExample {
 
         // Node 2: Context Enricher (context-aware)
         Node<String, String> contextEnricher = NodeBuilder.<String, String>create("context-enricher")
-            .subscribeTo("intent", "user-input")
+            .subscribeOnly("intent")
             .processWithContext((intentData, ctx) -> {
                 ExecutionContext execCtx = (ExecutionContext) ctx;
                 MessageContext msgCtx = execCtx.getMessageContext();
@@ -140,7 +140,7 @@ public class SpringBootIntegrationExample {
 
         // Node 3: Response Generator (context-aware)
         Node<String, String> responseGenerator = NodeBuilder.<String, String>create("response-generator")
-            .subscribeTo("enriched-context", "user-input")
+            .subscribeOnly("enriched-context")
             .processWithContext((enrichedData, ctx) -> {
                 ExecutionContext execCtx = (ExecutionContext) ctx;
                 MessageContext msgCtx = execCtx.getMessageContext();

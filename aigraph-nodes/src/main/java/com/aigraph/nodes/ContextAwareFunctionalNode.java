@@ -61,7 +61,7 @@ public final class ContextAwareFunctionalNode<I, O> implements ContextAwareNode<
         this.name = ValidationUtils.requireNonBlank(name, "name");
         this.subscribedChannels = Set.copyOf(subscribedChannels);
         this.readChannels = Set.copyOf(readChannels);
-        this.writeTargets = Map.copyOf(writeTargets);
+        this.writeTargets = Collections.unmodifiableMap(writeTargets);
         this.processor = ValidationUtils.requireNonNull(processor, "processor");
         this.metadata = metadata;
         this.executor = executor != null ? executor : DEFAULT_EXECUTOR;

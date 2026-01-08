@@ -29,7 +29,7 @@ class NodeBuilderTest {
             .writeTo("output")
             .build();
 
-        assertThat(node.getSubscribedChannels()).containsExactly("ch1", "ch2", "ch3");
+        assertThat(node.getSubscribedChannels()).containsExactlyInAnyOrder("ch1", "ch2", "ch3");
     }
 
     @Test
@@ -65,6 +65,7 @@ class NodeBuilderTest {
             NodeBuilder.<String, String>create("test")
                 .subscribeOnly("input")
                 .build()
-        ).isInstanceOf(NullPointerException.class);
+        ).isInstanceOf(IllegalStateException.class)
+         .hasMessageContaining("processing function");
     }
 }
