@@ -26,6 +26,12 @@
             <artifactId>aigraph-actuator</artifactId>
         </dependency>
 
+        <!-- Reactor for reactive examples -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+        </dependency>
+
         <!-- Spring Boot -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

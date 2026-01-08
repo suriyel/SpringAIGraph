@@ -160,9 +160,9 @@ public final class ContextAwareFunctionalNode<I, O> implements ContextAwareNode<
                         name, attempts + 1, policy.maxAttempts());
 
                     // Apply backoff
-                    long backoff = policy.backoffMillis() * attempts;
-                    if (backoff > 0) {
-                        Thread.sleep(backoff);
+                    Duration backoff = policy.calculateBackoff(attempts);
+                    if (backoff != null && !backoff.isZero()) {
+                        Thread.sleep(backoff.toMillis());
                     }
                 }
 
