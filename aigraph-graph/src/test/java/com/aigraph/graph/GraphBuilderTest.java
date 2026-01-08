@@ -70,6 +70,6 @@ class GraphBuilderTest {
             .build();
 
         ValidationResult result = graph.validate();
-        assertThat(result.valid()).isTrue();
+        assertThat(result.isValid()).isTrue();
     }
 }

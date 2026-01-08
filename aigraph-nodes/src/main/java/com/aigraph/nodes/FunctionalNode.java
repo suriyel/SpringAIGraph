@@ -6,10 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
 
@@ -66,7 +63,7 @@ public final class FunctionalNode<I, O> implements Node<I, O> {
         this.name = ValidationUtils.requireNonBlank(name, "name");
         this.subscribedChannels = Set.copyOf(ValidationUtils.requireNonEmpty(subscribedChannels, "subscribedChannels"));
         this.readChannels = Set.copyOf(readChannels);
-        this.writeTargets = Map.copyOf(writeTargets);
+        this.writeTargets = Collections.unmodifiableMap(writeTargets);
         this.processor = ValidationUtils.requireNonNull(processor, "processor");
         this.metadata = metadata != null ? metadata : NodeMetadata.of(name);
         this.executor = executor != null ? executor : DEFAULT_EXECUTOR;

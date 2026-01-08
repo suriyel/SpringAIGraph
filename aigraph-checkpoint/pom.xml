@@ -16,6 +16,10 @@
     <description>Checkpoint interfaces and serialization</description>
 
     <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
         <!-- Internal -->
         <dependency>
             <groupId>com.aigraph</groupId>

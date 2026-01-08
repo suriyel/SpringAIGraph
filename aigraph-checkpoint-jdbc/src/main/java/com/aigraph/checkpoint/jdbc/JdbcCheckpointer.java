@@ -1,6 +1,7 @@
 package com.aigraph.checkpoint.jdbc;
 
 import com.aigraph.checkpoint.*;
+import com.aigraph.core.exceptions.CheckpointException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;

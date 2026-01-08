@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
  * Result of graph validation.
  */
 public record ValidationResult(
-    boolean valid,
+    boolean isValid,
     List<ValidationIssue> issues
 ) {
     public ValidationResult {

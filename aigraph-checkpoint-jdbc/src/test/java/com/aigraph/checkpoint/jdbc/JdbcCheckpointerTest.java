@@ -97,7 +97,7 @@ class JdbcCheckpointerTest {
     }
 
     @Test
-    void shouldLoadLatest() {
+    void shouldLoadLatest() throws InterruptedException {
         CheckpointData data1 = new CheckpointData(
             "cp1", "thread1", 1, Map.of(), Map.of(),
             new CheckpointMetadata("test", 1, List.of(), null, Map.of()),

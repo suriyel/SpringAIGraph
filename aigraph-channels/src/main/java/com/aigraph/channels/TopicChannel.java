@@ -41,6 +41,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class TopicChannel<V> extends BaseChannel<List<V>, V, List<V>> {
 
+    private final Class<V> elementType;
     private final CopyOnWriteArrayList<V> values;
     private final boolean accumulate;
     private final boolean unique;
@@ -50,7 +51,7 @@ public final class TopicChannel<V> extends BaseChannel<List<V>, V, List<V>> {
      * Creates a new TopicChannel with default settings (non-accumulating, non-unique).
      *
      * @param name the channel name
-     * @param type the value type
+     * @param type the element value type
      */
     public TopicChannel(String name, Class<V> type) {
         this(name, type, false, false);
@@ -60,12 +61,14 @@ public final class TopicChannel<V> extends BaseChannel<List<V>, V, List<V>> {
      * Creates a new TopicChannel with custom settings.
      *
      * @param name       the channel name
-     * @param type       the value type
+     * @param type       the element value type
      * @param accumulate whether to accumulate values across steps
      * @param unique     whether to deduplicate values
      */
+    @SuppressWarnings("unchecked")
     public TopicChannel(String name, Class<V> type, boolean accumulate, boolean unique) {
-        super(name, type, type);
+        super(name, (Class<List<V>>) (Class<?>) List.class, type);
+        this.elementType = type;
         this.values = new CopyOnWriteArrayList<>();
         this.accumulate = accumulate;
         this.unique = unique;
@@ -75,7 +78,6 @@ public final class TopicChannel<V> extends BaseChannel<List<V>, V, List<V>> {
     /**
      * Private constructor for copy/checkpoint.
      */
-    @SuppressWarnings("unchecked")
     private TopicChannel(String name, Class<V> type, List<V> initialValues,
                          boolean accumulate, boolean unique) {
         this(name, type, accumulate, unique);
@@ -145,15 +147,13 @@ public final class TopicChannel<V> extends BaseChannel<List<V>, V, List<V>> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Channel<List<V>, V, List<V>> fromCheckpoint(List<V> checkpoint) {
-        return new TopicChannel<>(name, valueType, checkpoint, accumulate, unique);
+        return new TopicChannel<>(name, elementType, checkpoint, accumulate, unique);
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Channel<List<V>, V, List<V>> copy() {
-        return new TopicChannel<>(name, valueType, new ArrayList<>(values), accumulate, unique);
+        return new TopicChannel<>(name, elementType, new ArrayList<>(values), accumulate, unique);
     }
 
     @Override
@@ -179,5 +179,14 @@ public final class TopicChannel<V> extends BaseChannel<List<V>, V, List<V>> {
      */
     public int size() {
         return values.size();
+    }
+
+    /**
+     * Gets the element type of this channel.
+     *
+     * @return the element type class
+     */
+    public Class<V> getElementType() {
+        return elementType;
     }
 }

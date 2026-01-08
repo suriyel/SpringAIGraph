@@ -46,6 +46,6 @@ public class LoopExample {
 
         System.out.println("Input: " + input);
         System.out.println("Output: " + result);
-        System.out.println("Expected: 16 (1 -> 2 -> 4 -> 8 -> 16, stops because 32 >= 10)");
+        System.out.println("Expected: 8 (1 -> 2 -> 4 -> 8, stops because 16 >= 10)");
     }
 }
