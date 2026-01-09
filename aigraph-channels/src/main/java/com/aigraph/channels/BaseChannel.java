@@ -42,6 +42,22 @@ public abstract class BaseChannel<V, U, C> implements Channel<V, U, C> {
         this.updated = false;
     }
 
+    /**
+     * Creates a new base channel with specified update flag.
+     * Used by copy() methods to preserve updated state.
+     *
+     * @param name       the channel name
+     * @param valueType  the value type class
+     * @param updateType the update type class
+     * @param updated    the updated flag value
+     */
+    protected BaseChannel(String name, Class<V> valueType, Class<U> updateType, boolean updated) {
+        this.name = ValidationUtils.requireNonBlank(name, "name");
+        this.valueType = ValidationUtils.requireNonNull(valueType, "valueType");
+        this.updateType = ValidationUtils.requireNonNull(updateType, "updateType");
+        this.updated = updated;
+    }
+
     @Override
     public String getName() {
         return name;

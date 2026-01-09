@@ -73,8 +73,8 @@ public final class BinaryOperatorChannel<V> extends BaseChannel<V, V, V> {
      */
     private BinaryOperatorChannel(String name, Class<V> type,
                                    BinaryOperator<V> operator, V identity,
-                                   V currentValue, boolean initialized) {
-        super(name, type, type);
+                                   V currentValue, boolean initialized, boolean updated) {
+        super(name, type, type, updated);
         this.operator = operator;
         this.identity = identity;
         this.value = currentValue;
@@ -125,26 +125,33 @@ public final class BinaryOperatorChannel<V> extends BaseChannel<V, V, V> {
 
     @Override
     public V checkpoint() {
+        // Return null to explicitly indicate uninitialized state
+        // This allows distinguishing between uninitialized and initialized-with-identity-value
         if (!initialized) {
-            return identity;
+            return null;
         }
         return value;
     }
 
     @Override
     public Channel<V, V, V> fromCheckpoint(V checkpoint) {
-        boolean wasInitialized = checkpoint != null && !checkpoint.equals(identity);
+        // If checkpoint is null, channel was not initialized
+        // Otherwise, use the checkpoint value even if it equals identity
+        boolean wasInitialized = checkpoint != null;
+        // Checkpoints are restored with updated=false (fresh state)
         return new BinaryOperatorChannel<>(
             name, valueType, operator, identity,
             checkpoint != null ? checkpoint : identity,
-            wasInitialized
+            wasInitialized,
+            false
         );
     }
 
     @Override
     public Channel<V, V, V> copy() {
+        // Copy preserves the updated flag
         return new BinaryOperatorChannel<>(
-            name, valueType, operator, identity, value, initialized
+            name, valueType, operator, identity, value, initialized, this.updated
         );
     }
 

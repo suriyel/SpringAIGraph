@@ -4,6 +4,7 @@ import com.aigraph.channels.ChannelManager;
 import com.aigraph.core.exceptions.ExecutionException;
 import com.aigraph.nodes.Node;
 import com.aigraph.pregel.internal.ExecutionService;
+import com.aigraph.pregel.internal.InputPreparationService;
 import com.aigraph.pregel.internal.PlanningService;
 import com.aigraph.pregel.internal.UpdateService;
 import org.slf4j.Logger;
@@ -41,17 +42,19 @@ public class ReactivePregelExecutor {
     private final PlanningService planningService;
     private final ExecutionService executionService;
     private final UpdateService updateService;
+    private final InputPreparationService inputPreparationService;
     private final ExecutorService threadPool;
 
     public ReactivePregelExecutor(PregelConfig config) {
         this.planningService = new PlanningService();
         this.updateService = new UpdateService();
+        this.inputPreparationService = new InputPreparationService();
 
         // Create thread pool
         int poolSize = config.threadPoolSize();
         ThreadFactory threadFactory = new DaemonThreadFactory("reactive-pregel-executor");
         this.threadPool = Executors.newFixedThreadPool(poolSize, threadFactory);
-        this.executionService = new ExecutionService(threadPool);
+        this.executionService = new ExecutionService(threadPool, config.timeout());
 
         log.info("Reactive Pregel executor initialized with {} threads", poolSize);
     }
@@ -197,7 +200,7 @@ public class ReactivePregelExecutor {
 
         // Phase 2: Read inputs
         log.debug("Step {}: Reading inputs for {} nodes", stepNum, nodesToRun.size());
-        Map<String, Object> nodeInputs = prepareNodeInputs(nodesToRun, channelManager);
+        Map<String, Object> nodeInputs = inputPreparationService.prepareNodeInputs(nodesToRun, channelManager);
 
         // Phase 3: Execute nodes
         log.debug("Step {}: Executing {} nodes", stepNum, nodesToRun.size());
@@ -228,48 +231,28 @@ public class ReactivePregelExecutor {
             snapshots, stepStart, Instant.now());
     }
 
-    /**
-     * Prepares input data for nodes by reading from subscribed channels.
-     */
-    private Map<String, Object> prepareNodeInputs(List<Node<?, ?>> nodes, ChannelManager channelManager) {
-        Map<String, Object> inputs = new HashMap<>();
-
-        for (Node<?, ?> node : nodes) {
-            String nodeName = node.getName();
-            Set<String> subscribedChannels = node.getSubscribedChannels();
-
-            if (subscribedChannels.size() == 1) {
-                String channel = subscribedChannels.iterator().next();
-                try {
-                    Object value = channelManager.get(channel).get();
-                    inputs.put(nodeName, value);
-                } catch (Exception e) {
-                    log.warn("Failed to read channel '{}' for node '{}': {}",
-                        channel, nodeName, e.getMessage());
-                    inputs.put(nodeName, null);
-                }
-            } else {
-                Map<String, Object> channelValues = new HashMap<>();
-                for (String channel : subscribedChannels) {
-                    try {
-                        Object value = channelManager.get(channel).get();
-                        channelValues.put(channel, value);
-                    } catch (Exception e) {
-                        log.trace("Channel '{}' has no value for node '{}'", channel, nodeName);
-                    }
-                }
-                inputs.put(nodeName, channelValues);
-            }
-        }
-
-        return inputs;
-    }
 
     /**
      * Shuts down the executor and releases resources.
+     * Waits for existing tasks to complete within a timeout period.
+     * Forces shutdown if graceful shutdown times out.
      */
     public void shutdown() {
         log.info("Shutting down reactive Pregel executor");
         threadPool.shutdown();
+        try {
+            if (!threadPool.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                log.warn("Reactive thread pool did not terminate gracefully, forcing shutdown");
+                threadPool.shutdownNow();
+                // Wait a bit for tasks to respond to being cancelled
+                if (!threadPool.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                    log.error("Reactive thread pool did not terminate after forced shutdown");
+                }
+            }
+        } catch (InterruptedException e) {
+            log.warn("Shutdown interrupted, forcing immediate shutdown");
+            threadPool.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

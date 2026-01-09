@@ -125,6 +125,8 @@ public class ChannelManager {
 
     /**
      * Updates a channel with a list of values.
+     * <p>
+     * This method is thread-safe and ensures atomic update tracking.
      *
      * @param <U>    the update type
      * @param name   the channel name
@@ -133,7 +135,7 @@ public class ChannelManager {
      * @throws NoSuchElementException if channel doesn't exist
      */
     @SuppressWarnings("unchecked")
-    public <U> boolean update(String name, List<U> values) {
+    public synchronized <U> boolean update(String name, List<U> values) {
         Channel<?, U, ?> channel = get(name);
 
         boolean modified = channel.update(values);
@@ -149,14 +151,14 @@ public class ChannelManager {
     /**
      * Batch updates multiple channels.
      * <p>
-     * This method updates all channels and returns the set of channels
-     * that were actually modified.
+     * This method updates all channels atomically and returns the set of channels
+     * that were actually modified. The entire batch update is synchronized.
      *
      * @param updates map of channel name to list of update values
      * @return set of channel names that were updated
      */
     @SuppressWarnings("unchecked")
-    public Set<String> batchUpdate(Map<String, List<?>> updates) {
+    public synchronized Set<String> batchUpdate(Map<String, List<?>> updates) {
         ValidationUtils.requireNonNull(updates, "updates");
 
         Set<String> modified = new LinkedHashSet<>();

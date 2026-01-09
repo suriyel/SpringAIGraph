@@ -5,6 +5,7 @@ import com.aigraph.channels.ChannelManager;
 import com.aigraph.core.exceptions.ExecutionException;
 import com.aigraph.nodes.Node;
 import com.aigraph.pregel.internal.ExecutionService;
+import com.aigraph.pregel.internal.InputPreparationService;
 import com.aigraph.pregel.internal.PlanningService;
 import com.aigraph.pregel.internal.UpdateService;
 import org.slf4j.Logger;
@@ -36,15 +37,17 @@ public class PregelExecutor {
     private final PlanningService planningService;
     private final ExecutionService executionService;
     private final UpdateService updateService;
+    private final InputPreparationService inputPreparationService;
     private final ExecutorService threadPool;
 
     public PregelExecutor(PregelConfig config) {
         this.planningService = new PlanningService();
+        this.inputPreparationService = new InputPreparationService();
         this.threadPool = Executors.newFixedThreadPool(
                 config.threadPoolSize(),
                 new DaemonThreadFactory("pregel-worker")
         );
-        this.executionService = new ExecutionService(threadPool);
+        this.executionService = new ExecutionService(threadPool, config.timeout());
         this.updateService = new UpdateService();
     }
 
@@ -113,7 +116,7 @@ public class PregelExecutor {
 
         // Phase 2: Read inputs from channels for each node
         log.debug("Step {}: Reading inputs for {} nodes", stepNum, nodesToRun.size());
-        Map<String, Object> nodeInputs = prepareNodeInputs(nodesToRun, channelManager);
+        Map<String, Object> nodeInputs = inputPreparationService.prepareNodeInputs(nodesToRun, channelManager);
 
         // Phase 3: Execute nodes in parallel (pass context for context-aware nodes)
         log.debug("Step {}: Executing {} nodes", stepNum, nodesToRun.size());
@@ -144,86 +147,6 @@ public class PregelExecutor {
         );
     }
 
-    /**
-     * Prepares input values for each node by reading from their subscribed channels.
-     * <p>
-     * Input preparation rules:
-     * <ul>
-     *   <li>Single subscription: input is the channel value directly</li>
-     *   <li>Multiple subscriptions: input is a Map&lt;String, Object&gt; of channel name to value</li>
-     *   <li>Additional read channels are included in the map for multi-subscription nodes</li>
-     * </ul>
-     *
-     * @param nodes          the nodes to prepare inputs for
-     * @param channelManager the channel manager
-     * @return map of node name to input value
-     */
-    private Map<String, Object> prepareNodeInputs(List<Node<?, ?>> nodes, ChannelManager channelManager) {
-        Map<String, Object> nodeInputs = new HashMap<>();
-
-        for (Node<?, ?> node : nodes) {
-            String nodeName = node.getName();
-            Set<String> subscribedChannels = node.getSubscribedChannels();
-            Set<String> readChannels = node.getReadChannels();
-
-            try {
-                Object input;
-
-                if (subscribedChannels.size() == 1 && readChannels.isEmpty()) {
-                    // Single subscription: pass channel value directly
-                    String channelName = subscribedChannels.iterator().next();
-                    input = readChannelValue(channelManager, channelName);
-                } else {
-                    // Multiple subscriptions or has read channels: build a map
-                    Map<String, Object> inputMap = new LinkedHashMap<>();
-
-                    // Add subscribed channel values
-                    for (String channelName : subscribedChannels) {
-                        Object value = readChannelValue(channelManager, channelName);
-                        inputMap.put(channelName, value);
-                    }
-
-                    // Add additional read channel values
-                    for (String channelName : readChannels) {
-                        Object value = readChannelValue(channelManager, channelName);
-                        inputMap.put(channelName, value);
-                    }
-
-                    input = inputMap;
-                }
-
-                nodeInputs.put(nodeName, input);
-                log.trace("Prepared input for node '{}': {}", nodeName, input);
-
-            } catch (Exception e) {
-                log.warn("Failed to prepare input for node '{}': {}", nodeName, e.getMessage());
-                // Pass null if we can't read the input - node will handle it
-                nodeInputs.put(nodeName, null);
-            }
-        }
-
-        return nodeInputs;
-    }
-
-    /**
-     * Reads a value from a channel, returning null if the channel is empty.
-     *
-     * @param channelManager the channel manager
-     * @param channelName    the channel name
-     * @return the channel value, or null if empty
-     */
-    private Object readChannelValue(ChannelManager channelManager, String channelName) {
-        try {
-            Channel<?, ?, ?> channel = channelManager.get(channelName);
-            if (channel.isEmpty()) {
-                return null;
-            }
-            return channel.get();
-        } catch (Exception e) {
-            log.trace("Channel '{}' is empty or unreadable: {}", channelName, e.getMessage());
-            return null;
-        }
-    }
 
     /**
      * Creates snapshots of all channel values for debugging.
@@ -244,7 +167,26 @@ public class PregelExecutor {
         return snapshots;
     }
 
+    /**
+     * Shuts down the thread pool gracefully.
+     * Waits for existing tasks to complete within a timeout period.
+     * Forces shutdown if graceful shutdown times out.
+     */
     public void shutdown() {
         threadPool.shutdown();
+        try {
+            if (!threadPool.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                log.warn("Thread pool did not terminate gracefully, forcing shutdown");
+                threadPool.shutdownNow();
+                // Wait a bit for tasks to respond to being cancelled
+                if (!threadPool.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                    log.error("Thread pool did not terminate after forced shutdown");
+                }
+            }
+        } catch (InterruptedException e) {
+            log.warn("Shutdown interrupted, forcing immediate shutdown");
+            threadPool.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

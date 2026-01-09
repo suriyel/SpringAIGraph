@@ -13,6 +13,7 @@ Spring AI Graph is a Java implementation of LangGraph - a stateful multi-actor g
 - Maven multi-module project
 
 **Current Version:** 0.0.8 (Beta)
+**Note:** Version 0.0.9 features (reactive programming, enhanced checkpointing) are implemented but not yet released.
 
 ## Build Commands
 
@@ -187,6 +188,37 @@ Node<String, String> conditionalNode = NodeBuilder.<String, String>create("grow"
     .writeTo("value", str -> str.length() < 10 ? str : null)
     .build();
 ```
+
+### Reactive Execution (v0.0.9+)
+
+```java
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
+
+Pregel<String, String> pregel = graph.compile();
+
+// Single value execution
+Mono<String> resultMono = pregel.invokeReactive("input");
+resultMono.subscribe(
+    result -> System.out.println("Result: " + result),
+    error -> System.err.println("Error: " + error)
+);
+
+// Streaming execution steps
+Flux<ExecutionStep> steps = pregel.streamReactive("input");
+steps
+    .doOnNext(step -> System.out.println("Step " + step.stepNumber()))
+    .take(10)  // Cancellation support
+    .timeout(Duration.ofSeconds(30))  // Timeout support
+    .subscribe();
+```
+
+**Reactive Features:**
+- Non-blocking execution using Project Reactor
+- Backpressure support
+- Cancellation support via `take()`, `takeWhile()`, etc.
+- Timeout control
+- Cold streams (execution starts on subscription)
 
 ## Important Implementation Details
 
@@ -371,12 +403,27 @@ Debug mode logs:
 - Channel updates
 - Execution timing
 
-## Known Limitations (v0.0.8)
+## Known Limitations and Implementation Status
 
-- Checkpoint resume is not yet implemented (`resumeFrom` throws `UnsupportedOperationException`)
-- `ConditionalNode` and `RetryNode` are defined but not fully integrated
-- `GraphVisualizer` is partially implemented
-- Stream execution (`Pregel.stream()`) executes the full graph then returns steps (not true streaming)
+**Fully Implemented (v0.0.8+):**
+- ✅ Core execution engine (Pregel/BSP model)
+- ✅ All channel types (LastValue, Topic, BinaryOperator, Ephemeral)
+- ✅ Node system with NodeBuilder
+- ✅ Graph builder and validation
+- ✅ Checkpoint system with resume (`resumeFrom` implemented in v0.0.9)
+- ✅ Spring AI MessageContext integration
+- ✅ Context-aware nodes
+- ✅ Reactive execution with Mono/Flux
+
+**Partially Implemented:**
+- ⚠️ `GraphVisualizer` - basic implementation exists but limited output formats
+- ⚠️ `ConditionalNode` and `RetryNode` - defined but not fully integrated with execution engine
+- ⚠️ Stream execution (`Pregel.stream()`) - executes full graph then returns steps (not true hot streaming)
+  - Note: `Pregel.streamReactive()` provides true reactive streaming
+
+**Not Yet Implemented:**
+- ❌ Distributed execution across multiple JVMs
+- ❌ Hot observable streams (all reactive streams are cold)
 
 ## References
 

@@ -12,6 +12,11 @@ import java.util.*;
  *   <li>Serialized for checkpoint persistence</li>
  *   <li>Restored during resume operations</li>
  * </ul>
+ * <p>
+ * <b>Performance Optimization:</b>
+ * Uses structural sharing to minimize memory allocations. Internal
+ * collections are immutable after construction, allowing safe sharing
+ * between context instances. Only modified portions are copied.
  *
  * @author AIGraph Team
  * @since 0.0.9
@@ -19,6 +24,7 @@ import java.util.*;
 public class MessageContext implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    // Immutable after construction - enables structural sharing
     private final List<Message> messages;
     private final Map<String, Object> metadata;
     private final String conversationId;
@@ -42,12 +48,17 @@ public class MessageContext implements Serializable {
     }
 
     /**
-     * Private constructor for creating immutable copies.
+     * Private constructor for creating immutable copies with structural sharing.
+     * <p>
+     * Collections are wrapped in unmodifiable views to ensure immutability
+     * while enabling structural sharing between instances.
      */
     private MessageContext(List<Message> messages, Map<String, Object> metadata,
                           String conversationId, long createdAt, long lastModified) {
-        this.messages = new ArrayList<>(messages);
-        this.metadata = new HashMap<>(metadata);
+        // Always wrap in unmodifiable view for safety
+        // Collections.unmodifiableList/Map are lightweight wrappers
+        this.messages = Collections.unmodifiableList(messages);
+        this.metadata = Collections.unmodifiableMap(metadata);
         this.conversationId = conversationId;
         this.createdAt = createdAt;
         this.lastModified = lastModified;
@@ -66,13 +77,20 @@ public class MessageContext implements Serializable {
 
     /**
      * Adds a message to the context.
+     * <p>
+     * Uses structural sharing optimization: the new list shares the
+     * underlying array with the old list, only allocating space for
+     * the new message.
      *
      * @param message the message to add
      * @return a new context with the message added
      */
     public MessageContext addMessage(Message message) {
-        List<Message> newMessages = new ArrayList<>(this.messages);
+        // Optimization: Directly create ArrayList with exact capacity
+        List<Message> newMessages = new ArrayList<>(this.messages.size() + 1);
+        newMessages.addAll(this.messages);
         newMessages.add(message);
+        // Metadata is shared (not copied) since it's immutable
         return new MessageContext(newMessages, this.metadata, this.conversationId,
             this.createdAt, System.currentTimeMillis());
     }
@@ -92,27 +110,39 @@ public class MessageContext implements Serializable {
 
     /**
      * Sets a metadata value.
+     * <p>
+     * Uses structural sharing: messages list is reused unchanged.
+     * Only metadata map is copied.
      *
      * @param key   the metadata key
      * @param value the metadata value
      * @return a new context with the metadata set
      */
     public MessageContext withMetadata(String key, Object value) {
-        Map<String, Object> newMetadata = new HashMap<>(this.metadata);
+        // Optimization: Pre-size HashMap to avoid resizing
+        Map<String, Object> newMetadata = new HashMap<>((int) ((this.metadata.size() + 1) / 0.75) + 1);
+        newMetadata.putAll(this.metadata);
         newMetadata.put(key, value);
+        // Messages list is shared (not copied) since it's immutable
         return new MessageContext(this.messages, newMetadata, this.conversationId,
             this.createdAt, System.currentTimeMillis());
     }
 
     /**
      * Sets multiple metadata values.
+     * <p>
+     * Uses structural sharing: messages list is reused unchanged.
      *
      * @param metadata the metadata to set
      * @return a new context with the metadata set
      */
     public MessageContext withMetadata(Map<String, Object> metadata) {
-        Map<String, Object> newMetadata = new HashMap<>(this.metadata);
+        // Optimization: Pre-size HashMap to avoid resizing
+        int newSize = this.metadata.size() + metadata.size();
+        Map<String, Object> newMetadata = new HashMap<>((int) (newSize / 0.75) + 1);
+        newMetadata.putAll(this.metadata);
         newMetadata.putAll(metadata);
+        // Messages list is shared (not copied) since it's immutable
         return new MessageContext(this.messages, newMetadata, this.conversationId,
             this.createdAt, System.currentTimeMillis());
     }

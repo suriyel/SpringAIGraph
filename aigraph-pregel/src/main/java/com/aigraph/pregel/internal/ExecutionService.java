@@ -31,9 +31,11 @@ import java.util.function.Function;
 public class ExecutionService {
     private static final Logger log = LoggerFactory.getLogger(ExecutionService.class);
     private final ExecutorService threadPool;
+    private final Duration nodeExecutionTimeout;
 
-    public ExecutionService(ExecutorService threadPool) {
+    public ExecutionService(ExecutorService threadPool, Duration nodeExecutionTimeout) {
         this.threadPool = threadPool;
+        this.nodeExecutionTimeout = nodeExecutionTimeout != null ? nodeExecutionTimeout : Duration.ofMinutes(5);
     }
 
     /**
@@ -62,19 +64,23 @@ public class ExecutionService {
             futures.put(nodeName, future);
         }
 
-        // Wait for all nodes to complete
+        // Wait for all nodes to complete with configured timeout
         try {
             CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0]))
-                    .get(5, TimeUnit.MINUTES); // Default timeout
+                    .get(nodeExecutionTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
-            log.error("Node execution timed out");
+            log.error("Node execution timed out after {} ms", nodeExecutionTimeout.toMillis());
             // Cancel remaining futures
             futures.values().forEach(f -> f.cancel(true));
+            throw new com.aigraph.core.exceptions.ExecutionException(
+                "Node execution timed out after " + nodeExecutionTimeout.toMillis() + " ms", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Node execution interrupted");
+            throw new com.aigraph.core.exceptions.ExecutionException("Node execution interrupted", e);
         } catch (ExecutionException e) {
             log.error("Node execution failed", e.getCause());
+            throw new com.aigraph.core.exceptions.ExecutionException("Node execution failed", e.getCause());
         }
 
         // Collect results

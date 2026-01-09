@@ -50,8 +50,8 @@ public final class LastValueChannel<V> extends BaseChannel<V, V, V> {
     /**
      * Private constructor for copy/checkpoint restoration.
      */
-    private LastValueChannel(String name, Class<V> type, V initialValue, boolean hasValue) {
-        super(name, type, type);
+    private LastValueChannel(String name, Class<V> type, V initialValue, boolean hasValue, boolean updated) {
+        super(name, type, type, updated);
         this.value = initialValue;
         this.hasValue = hasValue;
     }
@@ -102,12 +102,14 @@ public final class LastValueChannel<V> extends BaseChannel<V, V, V> {
 
     @Override
     public Channel<V, V, V> fromCheckpoint(V checkpoint) {
-        return new LastValueChannel<>(name, valueType, checkpoint, true);
+        // Checkpoints are restored with updated=false (fresh state)
+        return new LastValueChannel<>(name, valueType, checkpoint, true, false);
     }
 
     @Override
     public Channel<V, V, V> copy() {
-        return new LastValueChannel<>(name, valueType, value, hasValue);
+        // Copy preserves the updated flag
+        return new LastValueChannel<>(name, valueType, value, hasValue, this.updated);
     }
 
     @Override

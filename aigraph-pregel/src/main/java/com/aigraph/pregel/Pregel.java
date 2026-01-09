@@ -98,15 +98,56 @@ public class Pregel<I, O> implements PregelGraph<I, O> {
 
     @Override
     public Stream<ExecutionStep> stream(I input) {
-        invoke(input);
-        ExecutionContext ctx = new ExecutionContext(
-                RuntimeConfig.defaults().threadId(),
+        return stream(input, RuntimeConfig.defaults());
+    }
+
+    /**
+     * Executes the graph and returns a stream of execution steps.
+     * Note: This executes the entire graph before returning the stream.
+     * For true reactive streaming, use {@link #streamReactive(Object)}.
+     *
+     * @param input the input data
+     * @param runtimeConfig the runtime configuration
+     * @return stream of execution steps
+     */
+    @SuppressWarnings("unchecked")
+    public Stream<ExecutionStep> stream(I input, RuntimeConfig runtimeConfig) {
+        // Clear previous execution flags
+        channelManager.clearUpdatedFlags();
+
+        // Collect initial updated channels
+        Set<String> initialUpdatedChannels = new HashSet<>();
+
+        // Initialize input channels
+        if (!config.inputChannels().isEmpty()) {
+            for (String inputChannel : config.inputChannels()) {
+                if (input != null) {
+                    channelManager.update(inputChannel, List.of(input));
+                }
+                initialUpdatedChannels.add(inputChannel);
+            }
+        }
+
+        // Create execution context
+        ExecutionContext context = new ExecutionContext(
+                runtimeConfig.threadId(),
                 channelManager,
                 nodeRegistry,
-                Set.of(),
+                initialUpdatedChannels,
                 config
         );
-        return ctx.getStepHistory().stream();
+
+        // Execute and capture the result with step history
+        ExecutionResult result = executor.execute(context);
+
+        if (!result.success()) {
+            throw new com.aigraph.core.exceptions.ExecutionException(
+                    "Stream execution failed", result.error()
+            );
+        }
+
+        // Return the step history as a stream
+        return result.steps().stream();
     }
 
     /**
