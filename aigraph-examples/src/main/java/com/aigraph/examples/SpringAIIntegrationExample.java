@@ -10,6 +10,9 @@ import com.aigraph.pregel.MessageContext;
 import com.aigraph.pregel.Pregel;
 import com.aigraph.pregel.PregelConfig;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * Example: Spring AI Integration with Message Context
  * <p>
@@ -58,19 +61,19 @@ public class SpringAIIntegrationExample {
 
         // Add metadata
         context = context.withMetadata("userId", "user-123")
-                        .withMetadata("sessionStart", System.currentTimeMillis());
+                .withMetadata("sessionStart", System.currentTimeMillis());
 
         // Display context information
         System.out.println("Conversation ID: " + context.getConversationId());
         System.out.println("Message Count: " + context.size());
         System.out.println("\nMessages:");
         context.getMessages().forEach(msg ->
-            System.out.printf("  [%s]: %s%n", msg.getRole(), msg.getContent())
+                System.out.printf("  [%s]: %s%n", msg.getRole(), msg.getContent())
         );
 
         System.out.println("\nMetadata:");
         context.getAllMetadata().forEach((key, value) ->
-            System.out.printf("  %s: %s%n", key, value)
+                System.out.printf("  %s: %s%n", key, value)
         );
 
         // Get last message
@@ -80,7 +83,7 @@ public class SpringAIIntegrationExample {
         // Filter messages by role
         System.out.println("\nUser Messages:");
         context.getMessagesByRole("user").forEach(msg ->
-            System.out.println("  - " + msg.getContent())
+                System.out.println("  - " + msg.getContent())
         );
     }
 
@@ -94,47 +97,41 @@ public class SpringAIIntegrationExample {
 
         // Create a context-aware node that accesses message history
         Node<String, String> contextAwareNode = NodeBuilder.<String, String>create("chat-processor")
-            .subscribeOnly("input")
-            .processWithContext((input, ctx) -> {
-                // Cast context to ExecutionContext
-                ExecutionContext execCtx = (ExecutionContext) ctx;
-                MessageContext msgCtx = execCtx.getMessageContext();
+                .subscribeOnly("input")
+                .processWithContext((input, ctx) -> {
+                    // Cast context to ExecutionContext
+                    ExecutionContext execCtx = (ExecutionContext) ctx;
+                    MessageContext msgCtx = execCtx.getMessageContext();
 
-                // Access message history
-                System.out.println("\n  Processing with context:");
-                System.out.println("  - Thread ID: " + execCtx.getThreadId());
-                System.out.println("  - Step Number: " + execCtx.getStepNumber());
-                System.out.println("  - Message Count: " + msgCtx.size());
+                    // Access message history
+                    System.out.println("\n  Processing with context:");
+                    System.out.println("  - Thread ID: " + execCtx.getThreadId());
+                    System.out.println("  - Step Number: " + execCtx.getStepNumber());
+                    System.out.println("  - Message Count: " + msgCtx.size());
 
-                // Build response based on conversation history
-                StringBuilder response = new StringBuilder("Response to: " + input);
-                if (!msgCtx.isEmpty()) {
-                    response.append(" (considering ").append(msgCtx.size())
-                           .append(" previous messages)");
-                }
+                    // Build response based on conversation history
+                    StringBuilder response = new StringBuilder("Response to: " + input);
+                    if (!msgCtx.isEmpty()) {
+                        response.append(" (considering ").append(msgCtx.size())
+                                .append(" previous messages)");
+                    }
 
-                return response.toString();
-            })
-            .writeTo("output")
-            .build();
+                    return response.toString();
+                })
+                .writeTo("output")
+                .build();
 
         // Build graph
         Graph<String, String> graph = GraphBuilder.<String, String>create()
-            .name("context-aware-graph")
-            .addNode("chat-processor", contextAwareNode)
-            .addChannel("input", new LastValueChannel<>("input", String.class))
-            .addChannel("output", new LastValueChannel<>("output", String.class))
-            .setInput("input")
-            .setOutput("output")
-            .build();
+                .name("context-aware-graph")
+                .addNode("chat-processor", contextAwareNode)
+                .addChannel("input", new LastValueChannel<>("input", String.class))
+                .addChannel("output", new LastValueChannel<>("output", String.class))
+                .setInput("input")
+                .setOutput("output")
+                .build();
 
-        // Create initial message context
-        MessageContext initialContext = new MessageContext("chat-session-001")
-            .addMessage("user", "What is AI?")
-            .addMessage("assistant", "AI stands for Artificial Intelligence...")
-            .addMessage("user", "Tell me more");
-
-        // Execute with message context
+        // Execute
         Pregel<String, String> pregel = graph.compile();
         String result = pregel.invoke("How does machine learning work?");
 
@@ -144,96 +141,118 @@ public class SpringAIIntegrationExample {
     /**
      * Example 3: Multi-Step AI Agent Workflow
      * Shows a more complex scenario with multiple context-aware nodes
+     *
+     * Key fix: When a node subscribes to multiple channels, the input becomes
+     * a Map<String, Object>. We need to declare the node with the correct type.
      */
     private static void multiStepAIAgentExample() {
         System.out.println("Example 3: Multi-Step AI Agent Workflow");
         System.out.println("-".repeat(50));
 
         // Node 1: Intent classifier (context-aware)
+        // Single subscription - input is String directly
         Node<String, String> intentNode = NodeBuilder.<String, String>create("intent-classifier")
-            .subscribeOnly("input")
-            .processWithContext((input, ctx) -> {
-                ExecutionContext execCtx = (ExecutionContext) ctx;
-                MessageContext msgCtx = execCtx.getMessageContext();
+                .subscribeOnly("input")
+                .processWithContext((input, ctx) -> {
+                    ExecutionContext execCtx = (ExecutionContext) ctx;
+                    MessageContext msgCtx = execCtx.getMessageContext();
 
-                System.out.println("\n[Intent Classifier]");
-                System.out.println("  Input: " + input);
-                System.out.println("  History size: " + msgCtx.size());
+                    System.out.println("\n[Intent Classifier]");
+                    System.out.println("  Input: " + input);
+                    System.out.println("  History size: " + msgCtx.size());
 
-                // Simple intent classification
-                String intent;
-                if (input.toLowerCase().contains("weather")) {
-                    intent = "WEATHER_QUERY";
-                } else if (input.toLowerCase().contains("hello") || input.toLowerCase().contains("hi")) {
-                    intent = "GREETING";
-                } else {
-                    intent = "GENERAL_QUERY";
-                }
+                    // Simple intent classification
+                    String intent;
+                    if (input.toLowerCase().contains("weather")) {
+                        intent = "WEATHER_QUERY";
+                    } else if (input.toLowerCase().contains("hello") || input.toLowerCase().contains("hi")) {
+                        intent = "GREETING";
+                    } else {
+                        intent = "GENERAL_QUERY";
+                    }
 
-                System.out.println("  Detected intent: " + intent);
-                return intent;
-            })
-            .writeTo("intent")
-            .build();
+                    System.out.println("  Detected intent: " + intent);
+                    return intent;
+                })
+                .writeTo("intent")
+                .build();
 
         // Node 2: Response generator (context-aware)
-        Node<String, String> responseNode = NodeBuilder.<String, String>create("response-generator")
-            .subscribeTo("intent", "input")
-            .processWithContext((intentData, ctx) -> {
-                ExecutionContext execCtx = (ExecutionContext) ctx;
-                MessageContext msgCtx = execCtx.getMessageContext();
+        // FIX: This node subscribes to multiple channels ("intent", "input")
+        // When subscribing to multiple channels, the input is Map<String, Object>
+        // We need to use the correct generic type: Map<String, Object> as input
+        Node<Map<String, Object>, String> responseNode = NodeBuilder
+                .<Map<String, Object>, String>create("response-generator")
+                .subscribeTo("intent")
+                .alsoRead("input")  // Use alsoRead for additional context without triggering
+                .processWithContext((inputs, ctx) -> {
+                    ExecutionContext execCtx = (ExecutionContext) ctx;
+                    MessageContext msgCtx = execCtx.getMessageContext();
 
-                System.out.println("\n[Response Generator]");
-                System.out.println("  Intent: " + intentData);
-                System.out.println("  Generating response based on conversation history...");
+                    System.out.println("\n[Response Generator]");
 
-                // Generate context-aware response
-                String response;
-                switch (intentData.toString()) {
-                    case "WEATHER_QUERY":
-                        response = "Based on our conversation, let me help with the weather...";
-                        break;
-                    case "GREETING":
-                        response = "Hello! Nice to meet you.";
-                        break;
-                    default:
-                        response = "I understand your question. Let me think about it...";
-                }
+                    // Extract values from the input map
+                    String intent = (String) inputs.get("intent");
+                    String originalInput = (String) inputs.get("input");
 
-                // Update message context with new exchange
-                MessageContext newContext = msgCtx
-                    .addMessage("user", "User query processed")
-                    .addMessage("assistant", response);
+                    System.out.println("  Intent: " + intent);
+                    System.out.println("  Original input: " + originalInput);
+                    System.out.println("  Generating response based on conversation history...");
 
-                System.out.println("  Response: " + response);
-                System.out.println("  Updated context size: " + newContext.size());
+                    // Generate context-aware response
+                    String response;
+                    if (intent == null) {
+                        intent = "GENERAL_QUERY";
+                    }
 
-                return response;
-            })
-            .writeTo("output")
-            .build();
+                    switch (intent) {
+                        case "WEATHER_QUERY":
+                            response = "Based on our conversation, let me help with the weather...";
+                            break;
+                        case "GREETING":
+                            response = "Hello! Nice to meet you.";
+                            break;
+                        default:
+                            response = "I understand your question. Let me think about it...";
+                    }
 
-        // Build graph
+                    // Update message context with new exchange
+                    MessageContext newContext = msgCtx
+                            .addMessage("user", originalInput != null ? originalInput : "User query")
+                            .addMessage("assistant", response);
+
+                    System.out.println("  Response: " + response);
+                    System.out.println("  Updated context size: " + newContext.size());
+
+                    return response;
+                })
+                .writeTo("output")
+                .build();
+
+        // Build graph with explicit channel types
         Graph<String, String> graph = GraphBuilder.<String, String>create()
-            .name("ai-agent-workflow")
-            .addNode("intent-classifier", intentNode)
-            .addNode("response-generator", responseNode)
-            .setInput("input")
-            .setOutput("output")
-            .build();
+                .name("ai-agent-workflow")
+                .addNode("intent-classifier", intentNode)
+                .addNode("response-generator", responseNode)
+                .addChannel("input", new LastValueChannel<>("input", String.class))
+                .addChannel("intent", new LastValueChannel<>("intent", String.class))
+                .addChannel("output", new LastValueChannel<>("output", String.class))
+                .setInput("input")
+                .setOutput("output")
+                .build();
 
         PregelConfig config = PregelConfig.builder()
-            .maxSteps(10)
-            .debug(true)
-            .build();
+                .maxSteps(10)
+                .debug(true)
+                .build();
 
         Pregel<String, String> pregel = graph.compile(config);
 
         // Test with different inputs
         String[] testInputs = {
-            "Hello there!",
-            "What's the weather like today?",
-            "Can you explain quantum computing?"
+                "Hello there!",
+                "What's the weather like today?",
+                "Can you explain quantum computing?"
         };
 
         for (String input : testInputs) {
