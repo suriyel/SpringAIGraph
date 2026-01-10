@@ -86,9 +86,10 @@ public class SpringBootIntegrationExample {
      * Builds a complete AI agent graph with multiple context-aware nodes.
      *
      * Key design decisions:
-     * - Each node subscribes to only ONE channel to receive direct values
-     * - Use alsoRead() for additional context without changing input type
-     * - This keeps the code simple and type-safe
+     * - Each node subscribes to only ONE channel to receive direct values (String)
+     * - Avoid alsoRead() to keep input type simple and type-safe
+     * - Use MessageContext for maintaining conversation state
+     * - Pass data through channels in a pipeline pattern
      */
     private static Graph<String, String> buildAIAgentGraph() {
         System.out.println("\n1. Building AI Agent Graph...");
@@ -123,18 +124,14 @@ public class SpringBootIntegrationExample {
                 .build();
 
         // Node 2: Context Enricher (context-aware)
-        // Subscribes to intent channel, reads user-input for context
+        // Subscribes to intent channel only - receives String directly
         Node<String, String> contextEnricher = NodeBuilder.<String, String>create("context-enricher")
                 .subscribeOnly("intent")
-                .alsoRead("user-input")
                 .processWithContext((intent, ctx) -> {
                     ExecutionContext execCtx = (ExecutionContext) ctx;
                     MessageContext msgCtx = execCtx.getMessageContext();
 
                     System.out.println("  [Context Enricher] Enriching context for intent: " + intent);
-
-                    // Note: When using alsoRead, the input is still a single value (intent)
-                    // The read channels are available through ChannelManager if needed
 
                     // Add current interaction to message context
                     MessageContext enriched = msgCtx
@@ -150,10 +147,9 @@ public class SpringBootIntegrationExample {
                 .build();
 
         // Node 3: Response Generator (context-aware)
-        // Subscribes to enriched-context, reads user-input for original message
+        // Subscribes to enriched-context only - receives String directly
         Node<String, String> responseGenerator = NodeBuilder.<String, String>create("response-generator")
                 .subscribeOnly("enriched-context")
-                .alsoRead("user-input", "intent")
                 .processWithContext((enrichedData, ctx) -> {
                     ExecutionContext execCtx = (ExecutionContext) ctx;
                     MessageContext msgCtx = execCtx.getMessageContext();

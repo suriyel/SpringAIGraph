@@ -102,10 +102,12 @@ public class StreamMonitoringExample {
 
         pregel.stream(42).forEach(step -> {
             completedSteps.incrementAndGet();
-            int progress = (completedSteps.get() * 100) / totalSteps;
+            int progress = Math.min(100, (completedSteps.get() * 100) / totalSteps);
 
-            // Print progress bar
-            String bar = "█".repeat(progress / 5) + "░".repeat(20 - progress / 5);
+            // Print progress bar (clamp values to prevent negative repeat count)
+            int filled = Math.min(20, progress / 5);
+            int empty = Math.max(0, 20 - filled);
+            String bar = "█".repeat(filled) + "░".repeat(empty);
             System.out.printf("\r[%s] %d%% - Step %d: %s completed in %dms",
                 bar, progress, step.stepNumber(),
                 step.executedNodes(), step.duration().toMillis());
